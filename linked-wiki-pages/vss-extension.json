@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1.0,
   "id": "linked-wiki-pages",
-  "version": "0.1.44",
+  "version": "0.1.47",
   "name": "Linked Wiki pages",
   "description": "Displays the list of all Wiki pages linked to current Work Item.",
   "publisher": "DimaBors",
@@ -63,15 +63,15 @@
   },
   "links": {
     "repository": {
-      "uri": "https://github.com/TFSExt/Forms"
+      "uri": "https://github.com/dimabors/wiki-links-devops"
     },
     "issues": {
-      "uri": "https://github.com/TFSExt/Forms/issues"
+      "uri": "https://github.com/dimabors/wiki-links-devops/issues"
     }
   },
   "repository": {
     "type": "git",
-    "uri": "https://github.com/TFSExt/Forms"
+    "uri": "https://github.com/dimabors/wiki-links-devops"
   },
   "files": [
     {

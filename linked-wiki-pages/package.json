@@ -1,7 +1,7 @@
 {
   "name": "link-work-to-wiki",
-  "version": "0.1.44",
-  "author": "Anton Boyko",
+  "version": "0.1.47",
+  "author": "Dima Bors",
   "license": "MIT",
   "dependencies": {
     "knockout": "^3.4.2",
