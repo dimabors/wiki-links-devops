@@ -36,3 +36,27 @@ After you install this extension from Marketplace it will automatically add cust
 
 **5.1.** Now you can get back to `Details` tab and see that linked Wiki page is displayed inside the `Linked wiki pages` section. You can now save and close your Work Item. When you will open it next time, all linked Wiki pages will be in place.  
 
+---
+
+## Auto-Link Scanner
+
+Instead of manually linking wiki pages to work items, you can use the **Wiki Auto-Link Scanner** to do it automatically. The scanner reads through all wiki pages in your project and finds work-item references written as `#123`. For every reference it finds, it creates an artifact link from the work item back to the wiki page.
+
+### How to use the scanner
+
+#### 1 – Open the scanner hub
+Navigate to **Boards** (Work hub group) and select **Wiki Auto-Link Scanner** from the navigation.
+
+#### 2 – Choose scan mode
+- **Dry run** (checked by default) – previews which links *would* be created, without modifying anything.
+- Uncheck **Dry run** to create the links for real.
+
+#### 3 – Run the scanner
+Click **Scan Wiki Pages**. The log area shows real-time progress: which pages are scanned, which work items are referenced, and whether links are created, skipped (already exist), or encounter errors.
+
+#### 4 – Review results
+After the scan completes you will see a summary with:
+- Pages scanned  
+- Links created (or "would create" in dry-run mode)  
+- Links skipped (already existed)  
+- Errors  

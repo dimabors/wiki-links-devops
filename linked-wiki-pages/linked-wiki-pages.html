@@ -10,6 +10,44 @@
 
     <script src="js/model.js"></script>
     <script src="js/viewModel.js"></script>
+    <script src="js/wikiScanner.js"></script>
+
+    <style>
+        .refresh-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #e0e0e0;
+        }
+        .btn-refresh {
+            padding: 3px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid #106ebe;
+            background: #106ebe;
+            color: #fff;
+            border-radius: 2px;
+        }
+        .btn-refresh:hover { background: #005a9e; }
+        .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+        .refresh-status {
+            font-size: 12px;
+            color: #666;
+        }
+        .refresh-spinner {
+            display: inline-block;
+            width: 12px; height: 12px;
+            border: 2px solid #ccc;
+            border-top-color: #106ebe;
+            border-radius: 50%;
+            animation: rspin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+        @keyframes rspin { to { transform: rotate(360deg); } }
+    </style>
 
     <script>
         VSS.init({
@@ -18,53 +56,92 @@
             usePlatformStyles: true
         });
 
-        var module = function(workItemsTrackingServices, artifactsServices, artifactsConstants) {
+        VSS.require([
+            "TFS/WorkItemTracking/Services",
+            "VSS/Artifacts/Services",
+            "VSS/Artifacts/Constants",
+            "VSS/Authentication/Services",
+            "TFS/VersionControl/GitRestClient",
+            "TFS/WorkItemTracking/RestClient"
+        ], function (workItemsTrackingServices, artifactsServices, artifactsConstants, VSS_Auth, GitRestClient, WitRestClient) {
             var model = getModel(workItemsTrackingServices);
             var viewModel = getViewModel(model, artifactsServices, artifactsConstants);
 
-            ko.applyBindings(viewModel, document.getElementById("container"));
+            // ── Refresh Wiki Links feature ──
+            var gitClient = GitRestClient.getClient();
+            var witClient = WitRestClient.getClient();
+            var context    = VSS.getWebContext();
 
+            viewModel.isRefreshing = ko.observable(false);
+            viewModel.refreshStatus = ko.observable("");
+            viewModel.refreshVisible = ko.observable(false);
+
+            viewModel.refreshWikiLinks = function () {
+                viewModel.isRefreshing(true);
+                viewModel.refreshStatus("");
+                viewModel.refreshVisible(true);
+
+                // Get current work item ID
+                workItemsTrackingServices.WorkItemFormService.getService()
+                    .then(function (svc) {
+                        return svc.getId();
+                    })
+                    .then(function (workItemId) {
+                        var scanner = createWikiScanner({
+                            context:   context,
+                            gitClient: gitClient,
+                            witClient: witClient,
+                            getAuthHeader: function () {
+                                return VSS.getAccessToken().then(function (token) {
+                                    return VSS_Auth.authTokenManager.getAuthorizationHeader(token);
+                                });
+                            },
+                            onProgress: function () {} // silent
+                        });
+
+                        return scanner.scanForWorkItem(workItemId);
+                    })
+                    .then(function (result) {
+                        viewModel.isRefreshing(false);
+                        if (result.linksCreated > 0) {
+                            viewModel.refreshStatus(result.linksCreated + " new link(s) created.");
+                            viewModel.reload(); // refresh the links list
+                        } else {
+                            viewModel.refreshStatus("All links up to date.");
+                        }
+                    })
+                    .catch(function (err) {
+                        viewModel.isRefreshing(false);
+                        viewModel.refreshStatus("Error: " + (err.message || String(err)));
+                    });
+            };
+
+            ko.applyBindings(viewModel, document.getElementById("container"));
 
             var listener = function () {
                 return {
-                    // called when a new work item is being loaded in the UI
                     onLoaded: function (args) {
                         viewModel.reload();
+                        viewModel.refreshVisible(false);
                     },
-
-                    // called when the active work item is modified
                     onFieldChanged: function(args) {
                         viewModel.reload();
                     },
-
-                    // called after the work item has been saved
                     onSaved: function (args) {
                         viewModel.reload();
                     },
-
-                    // called when the work item is reset to its unmodified state (undo)
                     onReset: function (args) {
                         viewModel.reload();
                     },
-
-                    // called when the work item has been refreshed from the server
                     onRefreshed: function (args) {
                         viewModel.reload();
                     }
                 };
             };
 
-            // register a listener for the work item page contribution
             VSS.register(VSS.getContribution().id, listener);
-
             VSS.notifyLoadSucceeded();
-        };
-
-        VSS.require([
-            "TFS/WorkItemTracking/Services",
-            "VSS/Artifacts/Services",
-            "VSS/Artifacts/Constants"
-        ], module);
+        });
     </script>
 
     <div id="container">
@@ -93,6 +170,16 @@
                 <span class="icon-error-exclamation"></span>
                 <span data-bind="text: error" class="validation-error-text"></span>
             </span>
+        </div>
+
+        <!-- Refresh Wiki Links -->
+        <div class="refresh-bar">
+            <button class="btn-refresh"
+                    data-bind="click: refreshWikiLinks, disable: isRefreshing">
+                <span data-bind="visible: isRefreshing"><span class="refresh-spinner"></span></span>
+                Update Wiki Links
+            </button>
+            <span class="refresh-status" data-bind="visible: refreshVisible, text: refreshStatus"></span>
         </div>
 
     </div>

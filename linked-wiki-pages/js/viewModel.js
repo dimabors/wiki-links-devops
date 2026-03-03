@@ -71,22 +71,24 @@ function getViewModel(model, artifactsServices, artifactsConstants) {
                     // get UI link items
                     .map(function(artifact) {
                         var segments = artifact.id.split("/");
+                        // segments[0] = projectId (GUID), segments[1] = wikiName, segments[2+] = page path
+                        var wikiProjectId = segments[0];
                         var pageSegments = [];
                         for (var i = 2; i < segments.length; i++) {
                             pageSegments.push(segments[i]);
                         }
 
-                        var pagePathEncoded = pageSegments
-                            .join("/")
-                            // replace all " " with "+"
-                            .split(" ").join("+");
-
                         var url = [
                             model.context.account.uri,
-                            model.context.project.name,
+                            encodeURIComponent(wikiProjectId),
                             "/_wiki/wikis/",
-                            segments[1] + "?pagePath=" + pagePathEncoded
+                            encodeURIComponent(segments[1]) + "?pagePath=" + encodeURIComponent(pageSegments.join("/"))
                         ].join("");
+
+                        // Prevent javascript: or data: scheme injection
+                        if (!/^https?:\/\//i.test(url)) {
+                            url = "#";
+                        }
 
                         return {
                             url: url,

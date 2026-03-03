@@ -1,10 +1,10 @@
 {
   "manifestVersion": 1.0,
   "id": "linked-wiki-pages",
-  "version": "0.1.32",
+  "version": "0.1.44",
   "name": "Linked Wiki pages",
   "description": "Displays the list of all Wiki pages linked to current Work Item.",
-  "publisher": "boykoant",
+  "publisher": "DimaBors",
   "galleryFlags": [
     "Public",
     "Preview"
@@ -13,6 +13,11 @@
     {
       "id": "Microsoft.VisualStudio.Services.Cloud"
     }
+  ],
+  "scopes": [
+    "vso.work_write",
+    "vso.wiki",
+    "vso.code"
   ],
   "icons": {
     "default": "img/icon.png"
@@ -30,10 +35,23 @@
         "uri": "linked-wiki-pages.html",
         "height": 200
       }
+    },
+    {
+      "id": "auto-link-scanner-hub",
+      "type": "ms.vss-web.hub",
+      "description": "Scans wiki pages for work item references (#NNN) and automatically creates links.",
+      "targets": [
+        "ms.vss-work-web.work-hub-group"
+      ],
+      "properties": {
+        "name": "Wiki Auto-Link Scanner",
+        "uri": "auto-link-hub.html",
+        "icon": "img/icon.png"
+      }
     }
   ],
   "categories": [
-    "Plan and track"
+    "Azure Boards"
   ],
   "tags": [
     "wiki"
@@ -58,6 +76,10 @@
   "files": [
     {
       "path": "linked-wiki-pages.html",
+      "addressable": true
+    },
+    {
+      "path": "auto-link-hub.html",
       "addressable": true
     },
     {

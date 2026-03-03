@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wiki Auto-Link Scanner</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px 30px;
+            color: #333;
+        }
+        h2 { margin-top: 0; }
+        .description {
+            color: #666;
+            margin-bottom: 20px;
+            max-width: 700px;
+            line-height: 1.5;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 6px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #106ebe;
+            background: #106ebe;
+            color: #fff;
+            border-radius: 2px;
+        }
+        .btn:hover { background: #005a9e; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary {
+            background: #fff;
+            color: #106ebe;
+        }
+        .btn-secondary:hover { background: #e8f0fe; }
+        .btn-success {
+            border-color: #107c10;
+            background: #107c10;
+        }
+        .btn-success:hover { background: #0b5e0b; }
+        .summary {
+            background: #f4f4f4;
+            border-left: 4px solid #106ebe;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            max-width: 600px;
+        }
+        .summary p { margin: 4px 0; }
+        .summary .label { font-weight: 600; min-width: 200px; display: inline-block; }
+
+        /* ── Results table ─────────────────────────────── */
+        .results-section { margin-bottom: 20px; max-width: 800px; }
+        .results-section h3 { margin-bottom: 8px; }
+        .select-controls { margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
+        .select-controls a {
+            color: #106ebe;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 13px;
+        }
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .results-table th, .results-table td {
+            text-align: left;
+            padding: 6px 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .results-table th {
+            background: #f4f4f4;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        .results-table tr:hover td { background: #f0f6ff; }
+        .results-table .col-check { width: 32px; text-align: center; }
+        .results-table .col-wi { width: 80px; }
+        .selected-count { font-size: 13px; color: #666; }
+
+        /* ── Collapsible log ───────────────────────────── */
+        .log-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #106ebe;
+            background: none;
+            border: none;
+            padding: 4px 0;
+            margin-bottom: 4px;
+        }
+        .log-toggle:hover { text-decoration: underline; }
+        .log-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+        .log-toggle .arrow.open { transform: rotate(90deg); }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            padding: 12px;
+            max-height: 350px;
+            overflow-y: auto;
+            border-radius: 2px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-width: 800px;
+        }
+        .log-area .line { padding: 1px 0; }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ccc;
+            border-top-color: #106ebe;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <script src="vsts/VSS.SDK.min.js"></script>
+    <script src="knockout/knockout-latest.js"></script>
+    <script src="js/wikiScanner.js"></script>
+
+    <script>
+        VSS.init({
+            explicitNotifyLoaded: true,
+            usePlatformScripts: true,
+            usePlatformStyles: true
+        });
+
+        VSS.require([
+            "VSS/Authentication/Services",
+            "TFS/VersionControl/GitRestClient",
+            "TFS/WorkItemTracking/RestClient"
+        ], function (VSS_Auth, GitRestClient, WitRestClient) {
+            var context   = VSS.getWebContext();
+            var gitClient = GitRestClient.getClient();
+            var witClient = WitRestClient.getClient();
+
+            // Shared scanner instance (created on each scan)
+            var currentScanner = null;
+
+            // ── View-model ──────────────────────────────────
+            var vm = {
+                // Phase states
+                isScanning:    ko.observable(false),
+                isLinking:     ko.observable(false),
+                scanComplete:  ko.observable(false),
+                linkComplete:  ko.observable(false),
+
+                // Scan summary
+                pagesScanned:  ko.observable(0),
+                refsFound:     ko.observable(0),
+                linksSkipped:  ko.observable(0),
+                scanErrors:    ko.observable(0),
+
+                // Link results
+                linksCreated:  ko.observable(0),
+                linkErrors:    ko.observable(0),
+
+                // Checkbox list of discovered links
+                // Each item: { checked: ko.observable(true), workItemId, workItemTitle, wikiName, pagePath, artifactUri }
+                discoveredLinks: ko.observableArray([]),
+
+                // Log
+                showLog:       ko.observable(false),
+                logMessages:   ko.observableArray([])
+            };
+
+            vm.canScan = ko.pureComputed(function () {
+                return !vm.isScanning() && !vm.isLinking();
+            });
+
+            vm.canLink = ko.pureComputed(function () {
+                return !vm.isScanning() && !vm.isLinking() && vm.selectedCount() > 0;
+            });
+
+            vm.hasLinks = ko.pureComputed(function () {
+                return vm.discoveredLinks().length > 0;
+            });
+
+            vm.selectedCount = ko.pureComputed(function () {
+                return vm.discoveredLinks().filter(function (d) { return d.checked(); }).length;
+            });
+
+            // ── Actions ─────────────────────────────────────
+
+            vm.toggleLog = function () {
+                vm.showLog(!vm.showLog());
+            };
+
+            vm.selectAll = function () {
+                vm.discoveredLinks().forEach(function (d) { d.checked(true); });
+            };
+
+            vm.deselectAll = function () {
+                vm.discoveredLinks().forEach(function (d) { d.checked(false); });
+            };
+
+            function appendLog(message) {
+                vm.logMessages.push(message);
+                var el = document.getElementById("log-area");
+                if (el) { setTimeout(function () { el.scrollTop = el.scrollHeight; }, 0); }
+            }
+
+            function createScanner() {
+                return createWikiScanner({
+                    context:   context,
+                    gitClient: gitClient,
+                    witClient: witClient,
+                    getAuthHeader: function () {
+                        return VSS.getAccessToken().then(function (token) {
+                            return VSS_Auth.authTokenManager.getAuthorizationHeader(token);
+                        });
+                    },
+                    onProgress: appendLog
+                });
+            }
+
+            /* Phase 1: Scan */
+            vm.startScan = function () {
+                vm.logMessages.removeAll();
+                vm.discoveredLinks.removeAll();
+                vm.isScanning(true);
+                vm.scanComplete(false);
+                vm.linkComplete(false);
+                vm.pagesScanned(0);
+                vm.refsFound(0);
+                vm.linksSkipped(0);
+                vm.scanErrors(0);
+                vm.linksCreated(0);
+                vm.linkErrors(0);
+
+                currentScanner = createScanner();
+
+                currentScanner.scan()
+                    .then(function (data) {
+                        var r = data.results;
+                        vm.pagesScanned(r.pagesScanned);
+                        vm.refsFound(r.referencesFound);
+                        vm.linksSkipped(r.linksSkipped);
+                        vm.scanErrors(r.errors.length);
+
+                        // Populate checkbox list (all checked by default)
+                        var items = data.discoveredLinks.map(function (d) {
+                            return {
+                                checked:       ko.observable(true),
+                                workItemId:    d.workItemId,
+                                workItemTitle: d.workItemTitle,
+                                wikiName:      d.wikiName,
+                                pagePath:      d.pagePath,
+                                artifactUri:   d.artifactUri
+                            };
+                        });
+                        vm.discoveredLinks(items);
+
+                        vm.isScanning(false);
+                        vm.scanComplete(true);
+                    })
+                    .catch(function (err) {
+                        appendLog("Fatal error: " + (err.message || String(err)));
+                        vm.isScanning(false);
+                    });
+            };
+
+            /* Phase 2: Apply selected links */
+            vm.applyLinks = function () {
+                var selected = vm.discoveredLinks().filter(function (d) { return d.checked(); });
+                if (selected.length === 0) return;
+
+                vm.isLinking(true);
+                vm.linkComplete(false);
+
+                // Reuse or rebuild scanner (for the witClient and onProgress callback)
+                if (!currentScanner) currentScanner = createScanner();
+
+                currentScanner.applyLinks(selected)
+                    .then(function (result) {
+                        vm.linksCreated(result.created);
+                        vm.linkErrors(result.errors.length);
+                        vm.isLinking(false);
+                        vm.linkComplete(true);
+                    })
+                    .catch(function (err) {
+                        appendLog("Fatal error: " + (err.message || String(err)));
+                        vm.isLinking(false);
+                    });
+            };
+
+            ko.applyBindings(vm, document.getElementById("scanner-container"));
+            VSS.notifyLoadSucceeded();
+        });
+    </script>
+
+    <div id="scanner-container">
+
+        <h2>Wiki Auto-Link Scanner</h2>
+
+        <p class="description">
+            Scans all wiki pages in this project for work-item references
+            (e.g.&nbsp;<strong>#123</strong>) and automatically creates
+            artifact links from the referenced work items back to the wiki
+            pages that mention them.
+        </p>
+
+        <!-- Step 1: Scan -->
+        <div class="controls">
+            <button class="btn"
+                    data-bind="click: startScan, disable: !canScan()">
+                <span data-bind="visible: isScanning">
+                    <span class="spinner"></span>
+                </span>
+                Scan Wiki Pages
+            </button>
+
+            <!-- Step 2: Apply selected links -->
+            <button class="btn btn-success"
+                    data-bind="visible: hasLinks, click: applyLinks, disable: !canLink()">
+                <span data-bind="visible: isLinking">
+                    <span class="spinner"></span>
+                </span>
+                Create Selected Links
+                (<span data-bind="text: selectedCount"></span>)
+            </button>
+        </div>
+
+        <!-- Scan Summary -->
+        <div class="summary" data-bind="visible: scanComplete">
+            <p><span class="label">Pages scanned:</span> <span data-bind="text: pagesScanned"></span></p>
+            <p><span class="label">References found:</span> <span data-bind="text: refsFound"></span></p>
+            <p><span class="label">New links discovered:</span> <span data-bind="text: discoveredLinks().length"></span></p>
+            <p><span class="label">Already linked (skipped):</span> <span data-bind="text: linksSkipped"></span></p>
+            <p data-bind="visible: scanErrors() > 0"><span class="label">Errors:</span> <span data-bind="text: scanErrors"></span></p>
+        </div>
+
+        <!-- Link-creation result -->
+        <div class="summary" style="border-left-color: #107c10;" data-bind="visible: linkComplete">
+            <p><span class="label">Links created:</span> <span data-bind="text: linksCreated"></span></p>
+            <p data-bind="visible: linkErrors() > 0"><span class="label">Errors:</span> <span data-bind="text: linkErrors"></span></p>
+        </div>
+
+        <!-- Discovered links with checkboxes -->
+        <div class="results-section" data-bind="visible: hasLinks">
+            <h3>Discovered Links</h3>
+            <div class="select-controls">
+                <a data-bind="click: selectAll">Select All</a>
+                <a data-bind="click: deselectAll">Deselect All</a>
+                <span class="selected-count"
+                      data-bind="text: selectedCount() + ' of ' + discoveredLinks().length + ' selected'"></span>
+            </div>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th class="col-check"></th>
+                        <th class="col-wi">Work Item</th>
+                        <th>Title</th>
+                        <th>Wiki Page</th>
+                    </tr>
+                </thead>
+                <tbody data-bind="foreach: discoveredLinks">
+                    <tr>
+                        <td class="col-check">
+                            <input type="checkbox" data-bind="checked: checked" />
+                        </td>
+                        <td data-bind="text: '#' + workItemId"></td>
+                        <td data-bind="text: workItemTitle"></td>
+                        <td data-bind="text: pagePath"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Collapsible Log -->
+        <div data-bind="visible: logMessages().length > 0">
+            <button class="log-toggle" data-bind="click: toggleLog">
+                <span class="arrow" data-bind="css: { open: showLog }">&#9654;</span>
+                Log output
+                (<span data-bind="text: logMessages().length"></span> lines)
+            </button>
+            <div id="log-area" class="log-area"
+                 data-bind="visible: showLog, foreach: logMessages">
+                <div class="line" data-bind="text: $data"></div>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
