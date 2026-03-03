@@ -40,23 +40,29 @@ After you install this extension from Marketplace it will automatically add cust
 
 ## Auto-Link Scanner
 
-Instead of manually linking wiki pages to work items, you can use the **Wiki Auto-Link Scanner** to do it automatically. The scanner reads through all wiki pages in your project and finds work-item references written as `#123`. For every reference it finds, it creates an artifact link from the work item back to the wiki page.
+Instead of manually linking wiki pages to work items, you can use the **Wiki Auto-Link Scanner** to do it automatically. The scanner reads through all wiki pages in your project and finds work-item references written as `#123` or as full URLs (`/_workitems/edit/123`). For every new reference it finds, it lets you review and selectively create artifact links.
 
 ### How to use the scanner
 
 #### 1 – Open the scanner hub
 Navigate to **Boards** (Work hub group) and select **Wiki Auto-Link Scanner** from the navigation.
 
-#### 2 – Choose scan mode
-- **Dry run** (checked by default) – previews which links *would* be created, without modifying anything.
-- Uncheck **Dry run** to create the links for real.
+#### 2 – Scan
+Click **Scan Wiki Pages**. The scanner reads every wiki page and checks which work-item references don't have links yet.
 
-#### 3 – Run the scanner
-Click **Scan Wiki Pages**. The log area shows real-time progress: which pages are scanned, which work items are referenced, and whether links are created, skipped (already exist), or encounter errors.
+#### 3 – Select links to create
+After the scan completes you'll see:
+- A **summary** with pages scanned, references found, new links discovered, and already-linked counts.
+- A **checkbox table** listing every new link to create (work item ID, title, and wiki page). All are selected by default — uncheck any you don't want. Use **Select All** / **Deselect All** for bulk changes.
 
-#### 4 – Review results
-After the scan completes you will see a summary with:
-- Pages scanned  
-- Links created (or "would create" in dry-run mode)  
-- Links skipped (already existed)  
-- Errors  
+#### 4 – Create selected links
+Click **Create Selected Links** to create only the checked links. A second summary confirms how many were created.
+
+#### 5 – Review the log
+Click **Log output** to expand the collapsible log panel with detailed scan progress.
+
+---
+
+## Update Wiki Links (per work item)
+
+Each work item's **Linked wiki pages** panel includes an **Update Wiki Links** button. Clicking it scans all wikis for references to that specific work item and automatically creates any missing links. The panel refreshes to show the newly linked pages.
