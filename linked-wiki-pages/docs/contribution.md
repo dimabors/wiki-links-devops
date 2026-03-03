@@ -2,7 +2,7 @@
 
 #### Issues
 
-Please file all the issues here on GitHub [https://github.com/TFSExt/Forms/issues](https://github.com/TFSExt/Forms/issues)
+Please file all the issues here on GitHub [https://github.com/dimabors/wiki-links-devops/issues](https://github.com/dimabors/wiki-links-devops/issues)
 
 #### Useful links for developing similar extensions
 
